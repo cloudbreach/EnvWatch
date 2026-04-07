@@ -1,73 +1,121 @@
-## EnvWatch - Environment Secret Scanner
+# EnvWatch - Environment Secret Scanner
 
-A Go utility that scans your system for exposed secrets in environment variables and `.env` files.
-
-## Overview
-
-EnvWatch is a security-focused tool that helps identify potential secrets and sensitive credentials that may be exposed in your system's environment variables and `.env` configuration files. It performs comprehensive scans and generates detailed JSON reports of findings.
+EnvWatch is a Go-based security scanner that detects exposed secrets, API keys, passwords, and sensitive credentials across your system. It performs comprehensive scans of environment variables, configuration files, SSH keys, and cloud credentials.
 
 ## Features
 
-- **Environment Variable Scanning**: Detects secrets in active environment variables
-- **File System Scanning**: Recursively searches the system for `.env` files
-- **Secret Detection**: Identifies variables containing sensitive keywords:
-  - `PASSWORD`
-  - `PASS`
-  - `SECRET`
-  - `API_KEY` / `APIKEY`
-  - `TOKEN`
-  - `AWS_SECRET`
-  - `PRIVATE_KEY`
-  - `ACCESS_KEY`
-  - `DB_PASSWORD`
-- **JSON Report Export**: Generates a structured report of all detected secrets
+- **Environment Variable Scanning**: Detects secret-related environment variables on the system
+- **Configuration File Scanning**: Searches for sensitive data in:
+  - `.env` files
+  - `.yml` and `.yaml` configuration files
+  - `.pem` and `.key` private key files
+- **Common Credential Detection**: Scans standard credential locations:
+  - AWS credentials (`~/.aws/credentials` and `~/.aws/config`)
+  - Git credentials (`~/.git-credentials`)
+  - Docker config (`~/.docker/config.json`)
+- **SSH Key Detection**: Identifies private keys in `~/.ssh/` directory
+- **JSON Report Export**: Generates detailed `secret_report.json` with all findings
 
-## Requirements
+## Secret Detection Keywords
 
-- Go 1.16 or higher
+EnvWatch identifies variables containing these keywords:
+- `PASSWORD`, `PASS`
+- `SECRET`
+- `API_KEY`, `APIKEY`
+- `TOKEN`
+- `AWS_SECRET`
+- `PRIVATE_KEY`
+- `ACCESS_KEY`
+- `DB_PASSWORD`
+
+## Installation
+
+### Prerequisites
+- Go 1.16 or later
 
 ## Usage
 
-Run the scanner:
-
+### Basic Execution
 ```bash
-go run envwatch.go .
+go run envwatch.go
 ```
 
-The tool will:
-1. Scan all environment variables in the current session
-2. Search the system for `.env` files
-3. Generate a `secret_report.json` file with results
+The scanner will:
+1. Scan all environment variables
+2. Recursively scan your home directory for sensitive files
+3. Check common credential file locations
+4. Scan your SSH directory for private keys
+5. Export results to `secret_report.json`
 
-## Output
+### Output
 
-The tool generates a `secret_report.json` file containing detected secrets with the following structure:
+**Console Output:**
+- Real-time detection messages for found secrets
+- File scanning progress updates
+- Completion confirmation with report location
 
+**JSON Report** (`secret_report.json`):
 ```json
-[
-  {
-    "source": "environment",
-    "file": "system",
-    "variable": "API_KEY",
-    "value": "your-secret-value"
-  },
-  {
-    "source": ".env file",
-    "file": "/path/to/.env",
-    "variable": "DB_PASSWORD",
-    "value": "password123"
-  }
-]
+{
+  "source": "environment|.env file|yaml file|key file|aws file|ssh key",
+  "file": "path/to/file",
+  "variable": "variable_name",
+  "value": "secret_value or [REDACTED]"
+}
+```
+
+## Example Output
+
+```
+EnvSecretScanner - Full System Scan
+-----------------------------------
+Scanning environment variables...
+
+Secret detected (ENV): AWS_SECRET_ACCESS_KEY
+Secret detected (ENV): DATABASE_PASSWORD
+
+Scanning system for sensitive files...
+
+Found file: /home/user/.env
+Secret detected (.env): API_KEY (file: /home/user/.env)
+
+Scanning common credential locations...
+
+Scanning AWS file: /home/user/.aws/credentials
+Secret detected (AWS): [profile]: aws_secret_access_key
+
+Scanning SSH directory...
+
+Private key detected: /home/user/.ssh/id_rsa
+
+JSON report saved to secret_report.json
 ```
 
 ## Security Considerations
 
-⚠️ **WARNING**: This tool outputs actual secret values in plain text to both console and JSON file. Use with caution in shared environments and properly secure the generated reports.
+**Important**: This tool can expose sensitive information. Use responsibly:
+- Run with appropriate permissions
+- Secure the generated `secret_report.json` file
+- Review results before sharing
+- Consider running in isolated environments during testing
+- The tool stores actual values for non-environment secrets by default
 
-**Best Practices:**
-- Run in isolated environments when possible
-- Immediately rotate any exposed credentials found
-- Secure the `secret_report.json` file containing sensitive data
-- Consider this tool for security audits and CI/CD pipelines
-- Use appropriate file permissions on generated reports
--
+## Use Cases
+
+- **Security Audits**: Identify exposed secrets in your infrastructure
+- **DevSecOps**: Automated secret detection in CI/CD pipelines
+- **Configuration Review**: Validate that sensitive data isn't hardcoded
+- **Compliance Checks**: Ensure credentials aren't stored insecurely
+- **Incident Response**: Locate compromise surfaces during security incidents
+
+## Output Files
+
+- `secret_report.json` - Comprehensive JSON report of all detected secrets
+
+## Performance
+
+EnvWatch optimizes performance by:
+- Limiting file system scans to user home directory (safer and faster than root)
+- Skipping system directories (`/proc`, `/sys`, `/dev`, `/run`)
+- Stopping directory traversal when entering these directories
+- Using efficient string matching for keyword detection
