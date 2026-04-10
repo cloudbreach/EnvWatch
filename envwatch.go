@@ -3,27 +3,53 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"flag"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode"
 )
 
-/// keywords indicating possible secrets
-var secretKeywords = []string{
-	"PASSWORD",
-	"PASS",
-	"SECRET",
-	"API_KEY",
-	"APIKEY",
-	"TOKEN",
-	"AWS_SECRET",
-	"PRIVATE_KEY",
-	"ACCESS_KEY",
-	"DB_PASSWORD",
+/* ================== COLORS ================== */
+
+var useColor = true
+
+const (
+	ColorReset  = "\033[0m"
+	ColorBlue   = "\033[34m"
+	ColorGreen  = "\033[32m"
+	ColorYellow = "\033[33m"
+)
+
+func colorize(color, text string) string {
+	if !useColor {
+		return text
+	}
+	return color + text + ColorReset
 }
 
-// structure for JSON output
+/* ================== FLAGS ================== */
+
+var (
+	flagEnvOnly   bool
+	flagYAMLOnly  bool
+	flagKeysOnly  bool
+	flagAWSOnly   bool
+	flagNoSystem  bool
+)
+
+/* ================== CONFIG ================== */
+
+var secretKeywords = []string{
+	"PASSWORD", "PASS", "SECRET", "API_KEY", "APIKEY",
+	"TOKEN", "AWS_SECRET", "PRIVATE_KEY", "ACCESS_KEY", "DB_PASSWORD",
+}
+
+var showSecrets bool
+var partialMask bool
+
 type SecretResult struct {
 	Source   string `json:"source"`
 	File     string `json:"file"`
@@ -31,10 +57,39 @@ type SecretResult struct {
 	Value    string `json:"value"`
 }
 
-// check if variable name contains secret keyword
+type Stats struct {
+	TotalSecrets int            `json:"total_secrets"`
+	FilesScanned int            `json:"files_scanned"`
+	BySource     map[string]int `json:"by_source"`
+}
+
+/* ================== INIT ================== */
+
+func init() {
+	flag.BoolVar(&showSecrets, "show-secrets", false, "Show full secret values")
+	flag.BoolVar(&partialMask, "partial", false, "Partially mask secrets")
+
+	flag.BoolVar(&flagEnvOnly, "env", false, "Scan only .env files")
+	flag.BoolVar(&flagYAMLOnly, "yaml", false, "Scan only YAML files")
+	flag.BoolVar(&flagKeysOnly, "keys", false, "Scan only key files")
+	flag.BoolVar(&flagAWSOnly, "aws", false, "Scan only AWS credentials")
+	flag.BoolVar(&flagNoSystem, "no-system", false, "Skip filesystem scan")
+
+	flag.Parse()
+
+	if fi, _ := os.Stdout.Stat(); (fi.Mode() & os.ModeCharDevice) == 0 {
+		useColor = false
+	}
+}
+
+/* ================== HELPERS ================== */
+
+func shouldScanAll() bool {
+	return !flagEnvOnly && !flagYAMLOnly && !flagKeysOnly && !flagAWSOnly
+}
+
 func containsSecretKeyword(name string) bool {
 	nameUpper := strings.ToUpper(name)
-
 	for _, keyword := range secretKeywords {
 		if strings.Contains(nameUpper, keyword) {
 			return true
@@ -43,23 +98,82 @@ func containsSecretKeyword(name string) bool {
 	return false
 }
 
-// get home directory
-func getHomeDir() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
+func maybeRedact(value string) string {
+	if showSecrets {
+		return value
 	}
+	if partialMask {
+		return maskPartial(value)
+	}
+	return "[REDACTED]"
+}
+
+func maskPartial(s string) string {
+	if len(s) <= 6 {
+		return "***"
+	}
+	return s[:3] + "..." + s[len(s)-3:]
+}
+
+func calculateEntropy(s string) float64 {
+	freq := make(map[rune]float64)
+	for _, c := range s {
+		freq[c]++
+	}
+
+	var entropy float64
+	length := float64(len(s))
+
+	for _, count := range freq {
+		p := count / length
+		entropy -= p * math.Log2(p)
+	}
+	return entropy
+}
+
+func looksLikeSecret(value string) bool {
+	if len(value) < 8 {
+		return false
+	}
+
+	entropy := calculateEntropy(value)
+
+	hasLetter := false
+	hasDigit := false
+
+	for _, c := range value {
+		if unicode.IsLetter(c) {
+			hasLetter = true
+		}
+		if unicode.IsDigit(c) {
+			hasDigit = true
+		}
+	}
+
+	return entropy > 3.5 && hasLetter && hasDigit
+}
+
+func getHomeDir() string {
+	home, _ := os.UserHomeDir()
 	return home
 }
 
-// scan environment variables
-func scanEnvVars(results *[]SecretResult) {
+func recordSecret(results *[]SecretResult, stats *Stats, res SecretResult) {
+	*results = append(*results, res)
+	stats.TotalSecrets++
+	stats.BySource[res.Source]++
+}
 
-	fmt.Println("Scanning environment variables...\n")
+/* ================== SCANNERS ================== */
 
-	envVars := os.Environ()
+func scanEnvVars(results *[]SecretResult, stats *Stats) {
+	if flagAWSOnly {
+		return
+	}
 
-	for _, env := range envVars {
+	fmt.Println(colorize(ColorYellow, "Scanning environment variables...\n"))
+
+	for _, env := range os.Environ() {
 
 		parts := strings.SplitN(env, "=", 2)
 		if len(parts) != 2 {
@@ -67,35 +181,34 @@ func scanEnvVars(results *[]SecretResult) {
 		}
 
 		key := parts[0]
+		value := parts[1]
 
-		if containsSecretKeyword(key) {
+		if containsSecretKeyword(key) || looksLikeSecret(value) {
+			fmt.Println(colorize(ColorGreen, "-> "+key))
 
-			fmt.Printf("Secret detected (ENV): %s\n", key)
-
-			*results = append(*results, SecretResult{
+			recordSecret(results, stats, SecretResult{
 				Source:   "environment",
 				File:     "system",
 				Variable: key,
-				Value:    "[REDACTED]",
+				Value:    maybeRedact(value),
 			})
 		}
 	}
 }
 
-// scan a .env file
-func scanEnvFile(path string, results *[]SecretResult) {
+func scanEnvFile(path string, results *[]SecretResult, stats *Stats) {
+	if !(shouldScanAll() || flagEnvOnly) {
+		return
+	}
 
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return
 	}
 
-	lines := strings.Split(string(data), "\n")
-
-	for _, line := range lines {
+	for _, line := range strings.Split(string(data), "\n") {
 
 		line = strings.TrimSpace(line)
-
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
@@ -105,111 +218,103 @@ func scanEnvFile(path string, results *[]SecretResult) {
 		}
 
 		parts := strings.SplitN(line, "=", 2)
-
 		key := strings.TrimSpace(parts[0])
 		value := strings.TrimSpace(parts[1])
 
-		if containsSecretKeyword(key) {
+		if containsSecretKeyword(key) || looksLikeSecret(value) {
+			fmt.Println("  " + colorize(ColorGreen, "-> "+key) + fmt.Sprintf(" (%s)", path))
 
-			fmt.Printf("Secret detected (.env): %s (file: %s)\n", key, path)
-
-			*results = append(*results, SecretResult{
+			recordSecret(results, stats, SecretResult{
 				Source:   ".env file",
 				File:     path,
 				Variable: key,
-				Value:    value,
+				Value:    maybeRedact(value),
 			})
 		}
 	}
 }
 
-// scan YAML files
-func scanYAMLFile(path string, results *[]SecretResult) {
+func scanYAMLFile(path string, results *[]SecretResult, stats *Stats) {
+	if !(shouldScanAll() || flagYAMLOnly) {
+		return
+	}
 
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return
 	}
 
-	lines := strings.Split(string(data), "\n")
-
-	for _, line := range lines {
-
-		line = strings.TrimSpace(line)
-
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
+	for _, line := range strings.Split(string(data), "\n") {
 
 		if !strings.Contains(line, ":") {
 			continue
 		}
 
 		parts := strings.SplitN(line, ":", 2)
-
 		key := strings.TrimSpace(parts[0])
 		value := strings.TrimSpace(parts[1])
 
-		if containsSecretKeyword(key) {
+		if containsSecretKeyword(key) || looksLikeSecret(value) {
+			fmt.Println("  " + colorize(ColorGreen, "-> "+key) + fmt.Sprintf(" (%s)", path))
 
-			fmt.Printf("Secret detected (YAML): %s (%s)\n", key, path)
-
-			*results = append(*results, SecretResult{
+			recordSecret(results, stats, SecretResult{
 				Source:   "yaml file",
 				File:     path,
 				Variable: key,
-				Value:    value,
+				Value:    maybeRedact(value),
 			})
 		}
 	}
 }
 
-// scan key files (.pem / .key)
-func scanKeyFile(path string, results *[]SecretResult) {
+func scanKeyFile(path string, results *[]SecretResult, stats *Stats) {
+	if !(shouldScanAll() || flagKeysOnly) {
+		return
+	}
 
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return
 	}
 
-	content := string(data)
+	if strings.Contains(string(data), "PRIVATE KEY") {
+		fmt.Println("  " + colorize(ColorGreen, "-> Private key detected:") + " " + path)
 
-	if strings.Contains(content, "PRIVATE KEY") {
-
-		fmt.Printf("Private key detected: %s\n", path)
-
-		*results = append(*results, SecretResult{
+		recordSecret(results, stats, SecretResult{
 			Source:   "key file",
 			File:     path,
 			Variable: filepath.Base(path),
-			Value:    "[PRIVATE KEY DETECTED]",
+			Value:    maybeRedact(string(data)),
 		})
 	}
 }
 
-// scan AWS credentials/config files
-func scanAWSFile(path string, results *[]SecretResult) {
+func scanAWS(results *[]SecretResult, stats *Stats) {
+	if !(shouldScanAll() || flagAWSOnly) {
+		return
+	}
 
+	home := getHomeDir()
+
+	scanAWSFile(filepath.Join(home, ".aws", "credentials"), results, stats)
+	scanAWSFile(filepath.Join(home, ".aws", "config"), results, stats)
+}
+
+func scanAWSFile(path string, results *[]SecretResult, stats *Stats) {
 	file, err := os.Open(path)
 	if err != nil {
 		return
 	}
 	defer file.Close()
 
-	fmt.Printf("Scanning AWS file: %s\n", path)
-
 	scanner := bufio.NewScanner(file)
-	currentSection := ""
+	section := ""
 
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-
-		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
-			currentSection = line
+		if strings.HasPrefix(line, "[") {
+			section = line
 			continue
 		}
 
@@ -219,206 +324,116 @@ func scanAWSFile(path string, results *[]SecretResult) {
 
 		parts := strings.SplitN(line, "=", 2)
 		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
 
-		if containsSecretKeyword(key) ||
-			strings.Contains(strings.ToLower(key), "access_key") {
+		if containsSecretKeyword(key) || looksLikeSecret(value) {
+			fmt.Println("  " + colorize(ColorGreen, "-> "+key) + fmt.Sprintf(" (%s)", path))
 
-			fmt.Printf("Secret detected (AWS): %s (%s)\n", key, path)
-
-			*results = append(*results, SecretResult{
+			recordSecret(results, stats, SecretResult{
 				Source:   "aws file",
 				File:     path,
-				Variable: currentSection + ":" + key,
-				Value:    "[REDACTED]",
+				Variable: section + ":" + key,
+				Value:    maybeRedact(value),
 			})
 		}
 	}
 }
 
-// scan common credential files
-func scanCommonCredentialFiles(results *[]SecretResult) {
-
-	fmt.Println("\nScanning common credential locations...\n")
-
-	home := getHomeDir()
-	if home == "" {
+func scanSystem(results *[]SecretResult, stats *Stats) {
+	if flagNoSystem {
 		return
 	}
 
-	paths := []string{
-		filepath.Join(home, ".aws", "credentials"),
-		filepath.Join(home, ".aws", "config"),
-		filepath.Join(home, ".git-credentials"),
-		filepath.Join(home, ".docker", "config.json"),
-	}
-
-	for _, path := range paths {
-
-		if _, err := os.Stat(path); err == nil {
-
-			if strings.Contains(path, ".aws") {
-				scanAWSFile(path, results)
-				continue
-			}
-
-			data, err := os.ReadFile(path)
-			if err != nil {
-				continue
-			}
-
-			content := strings.ToLower(string(data))
-
-			if strings.Contains(content, "token") ||
-				strings.Contains(content, "password") ||
-				strings.Contains(content, "secret") {
-
-				fmt.Printf("Potential secret in file: %s\n", path)
-
-				*results = append(*results, SecretResult{
-					Source:   "common file",
-					File:     path,
-					Variable: "N/A",
-					Value:    "[REDACTED]",
-				})
-			}
-		}
-	}
-}
-
-// scan SSH private keys
-func scanSSHKeys(results *[]SecretResult) {
-
-	fmt.Println("\nScanning SSH directory...\n")
-
-	home := getHomeDir()
-	sshDir := filepath.Join(home, ".ssh")
-
-	files, err := os.ReadDir(sshDir)
-	if err != nil {
-		return
-	}
-
-	for _, file := range files {
-
-		path := filepath.Join(sshDir, file.Name())
-
-		data, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-
-		content := string(data)
-
-		if strings.Contains(content, "PRIVATE KEY") {
-
-			fmt.Printf("Private key detected: %s\n", path)
-
-			*results = append(*results, SecretResult{
-				Source:   "ssh key",
-				File:     path,
-				Variable: file.Name(),
-				Value:    "[PRIVATE KEY DETECTED]",
-			})
-		}
-	}
-}
-
-// scan system for sensitive files
-func scanSystemForSensitiveFiles(results *[]SecretResult) {
-
-	fmt.Println("\nScanning system for sensitive files...\n")
-
-	root := getHomeDir() // safer + faster than "/"
-
-	targetExtensions := []string{
-		".env",
-		".yml",
-		".yaml",
-		".pem",
-		".key",
-	}
-
-	skipDirs := []string{
-		"/proc",
-		"/sys",
-		"/dev",
-		"/run",
-	}
+	root := getHomeDir()
+	fileCount := 0
 
 	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 
-		if err != nil {
+		if err != nil || info.IsDir() {
 			return nil
 		}
 
-		// skip noisy/system dirs
-		for _, dir := range skipDirs {
-			if strings.HasPrefix(path, dir) {
-				return filepath.SkipDir
-			}
+		stats.FilesScanned++
+		fileCount++
+
+		fmt.Println(colorize(ColorBlue, fmt.Sprintf("%d. %s", fileCount, path)))
+
+		name := strings.ToLower(info.Name())
+
+		if strings.HasSuffix(name, ".env") {
+			scanEnvFile(path, results, stats)
 		}
-
-		if info.IsDir() {
-			return nil
+		if strings.HasSuffix(name, ".yaml") || strings.HasSuffix(name, ".yml") {
+			scanYAMLFile(path, results, stats)
 		}
-
-		for _, ext := range targetExtensions {
-
-			if strings.HasSuffix(strings.ToLower(info.Name()), ext) {
-
-				fmt.Printf("Found file: %s\n", path)
-
-				switch ext {
-
-				case ".env":
-					scanEnvFile(path, results)
-
-				case ".yml", ".yaml":
-					scanYAMLFile(path, results)
-
-				case ".pem", ".key":
-					scanKeyFile(path, results)
-				}
-			}
+		if strings.HasSuffix(name, ".pem") || strings.HasSuffix(name, ".key") {
+			scanKeyFile(path, results, stats)
 		}
 
 		return nil
 	})
 }
 
-// export results to JSON
-func exportJSON(results []SecretResult) {
-
-	file, err := os.Create("secret_report.json")
-	if err != nil {
-		fmt.Println("Error creating JSON report")
-		return
-	}
-	defer file.Close()
-
-	encoder := json.NewEncoder(file)
-	encoder.SetIndent("", "  ")
-
-	err = encoder.Encode(results)
-	if err != nil {
-		fmt.Println("Error writing JSON")
-		return
-	}
-
-	fmt.Println("\nJSON report saved to secret_report.json")
-}
+/* ================== MAIN ================== */
 
 func main() {
 
-	fmt.Println("EnvSecretScanner - Full System Scan")
-	fmt.Println("-----------------------------------")
+	fmt.Println(`
+███████╗███╗   ██╗██╗   ██╗██╗    ██╗ █████╗ ████████╗ ██████╗██╗  ██╗
+██╔════╝████╗  ██║██║   ██║██║    ██║██╔══██╗╚══██╔══╝██╔════╝██║  ██║
+█████╗  ██╔██╗ ██║██║   ██║██║ █╗ ██║███████║   ██║   ██║     ███████║
+██╔══╝  ██║╚██╗██║╚██╗ ██╔╝██║███╗██║██╔══██║   ██║   ██║     ██╔══██║
+███████╗██║ ╚████║ ╚████╔╝ ╚███╔███╔╝██║  ██║   ██║   ╚██████╗██║  ██║
+╚══════╝╚═╝  ╚═══╝  ╚═══╝   ╚══╝╚══╝ ╚═╝  ╚═╝   ╚═╝    ╚═════╝╚═╝  ╚═╝
+
+        🔍 EnvWatch  |  A Go utility that scans your system for exposed secrets
+--------------------------------------------------
+`)
+	fmt.Println("--------------------------------------------------")
 
 	var results []SecretResult
+	stats := Stats{BySource: make(map[string]int)}
 
-	scanEnvVars(&results)
-	scanSystemForSensitiveFiles(&results)
-	scanCommonCredentialFiles(&results)
-	scanSSHKeys(&results)
+	scanEnvVars(&results, &stats)
+	scanSystem(&results, &stats)
+	scanAWS(&results, &stats)
 
-	exportJSON(results)
+	fmt.Println("\n" + colorize(ColorYellow, "📊 Scan Summary"))
+	fmt.Println("--------------------------------------------------")
+
+	fmt.Println(colorize(ColorYellow, fmt.Sprintf("Total secrets found: %d", stats.TotalSecrets)))
+	fmt.Println(colorize(ColorYellow, fmt.Sprintf("Total files scanned: %d\n", stats.FilesScanned)))
+
+	fmt.Println("Breakdown by source:")
+	for source, count := range stats.BySource {
+		fmt.Printf("  %-15s : %d\n", source, count)
+	}
+
+	// Export to JSON file
+	reportFile := "secret_report.json"
+	f, err := os.Create(reportFile)
+	if err != nil {
+		fmt.Println("Error creating report file:", err)
+		return
+	}
+	defer f.Close()
+
+	reportData := map[string]interface{}{
+		"stats":   stats,
+		"secrets": results,
+	}
+
+	jsonData, err := json.MarshalIndent(reportData, "", "  ")
+	if err != nil {
+		fmt.Println("Error marshaling JSON:", err)
+		return
+	}
+
+	_, err = f.Write(jsonData)
+	if err != nil {
+		fmt.Println("Error writing report file:", err)
+		return
+	}
+
+	fmt.Println(colorize(ColorYellow, "\n✅ Secret report saved to "+reportFile))
 }
