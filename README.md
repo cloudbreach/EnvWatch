@@ -4,9 +4,6 @@ go run envwatch.go
 # Only .env files
 go run envwatch.go --env
 
-# Only YAML
-go run envwatch.go --yaml
-
 # Only keys
 go run envwatch.go --keys
 
