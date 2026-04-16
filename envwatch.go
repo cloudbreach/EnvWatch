@@ -12,8 +12,6 @@ import (
 	"unicode"
 )
 
-/* ================== COLORS ================== */
-
 var useColor = true
 
 const (
@@ -30,8 +28,6 @@ func colorize(color, text string) string {
 	return color + text + ColorReset
 }
 
-/* ================== FLAGS ================== */
-
 var (
 	flagEnvOnly  bool
 	flagKeysOnly bool
@@ -40,11 +36,7 @@ var (
 	flagHelp     bool
 )
 
-/* ================== GLOBAL COUNTER ================== */
-
 var fileCounter int
-
-/* ================== CONFIG ================== */
 
 var secretKeywords = []string{
 	"PASSWORD", "PASS", "SECRET", "API_KEY", "APIKEY",
@@ -67,8 +59,6 @@ type Stats struct {
 	BySource     map[string]int `json:"by_source"`
 }
 
-/* ================== HELP ================== */
-
 func printHelp() {
 	fmt.Println(`
 EnvWatch - A Go utility that scans your system for exposed secrets
@@ -88,8 +78,6 @@ OPTIONS:
   --help          Show help
 `)
 }
-
-/* ================== INIT ================== */
 
 func init() {
 	flag.BoolVar(&showSecrets, "show-secrets", false, "")
@@ -113,8 +101,6 @@ func init() {
 		useColor = false
 	}
 }
-
-/* ================== HELPERS ================== */
 
 func shouldScanAll() bool {
 	return !flagEnvOnly && !flagKeysOnly && !flagAWSOnly
@@ -200,8 +186,6 @@ func printFileHeader(path string) {
 	fileCounter++
 	fmt.Println(colorize(ColorBlue, fmt.Sprintf("%d. %s", fileCounter, path)))
 }
-
-/* ================== SCANNERS ================== */
 
 func scanEnvVars(results *[]SecretResult, stats *Stats) {
 	if flagAWSOnly {
@@ -414,8 +398,6 @@ func scanSystem(results *[]SecretResult, stats *Stats) {
 		return nil
 	})
 }
-
-/* ================== MAIN ================== */
 
 func main() {
 
