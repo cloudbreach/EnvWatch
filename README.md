@@ -189,3 +189,5 @@ Feel free to create a Pull Request if you have any ideas or features you would l
 Built to simplify secret discovery and reduce accidental leaks during development and deployment.
 
 ---
+
+[![Go Version](https://img.shields.io/static/v1.svg?label=Go&message=1.24.13&color=blue)]()
