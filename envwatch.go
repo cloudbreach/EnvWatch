@@ -37,6 +37,7 @@ var (
 	flagKeysOnly bool
 	flagAWSOnly  bool
 	flagNoSystem bool
+	flagHelp     bool
 )
 
 /* ================== GLOBAL COUNTER ================== */
@@ -66,18 +67,47 @@ type Stats struct {
 	BySource     map[string]int `json:"by_source"`
 }
 
+/* ================== HELP ================== */
+
+func printHelp() {
+	fmt.Println(`
+EnvWatch - A Go utility that scans your system for exposed secrets
+
+USAGE:
+  envwatch [options]
+
+OPTIONS:
+  --env           Scan only .env files
+  --keys          Scan only key files
+  --aws           Scan only AWS credentials
+  --no-system     Skip filesystem scan
+
+  --show-secrets  Show full secrets
+  --partial       Partially mask secrets
+
+  --help          Show help
+`)
+}
+
 /* ================== INIT ================== */
 
 func init() {
-	flag.BoolVar(&showSecrets, "show-secrets", false, "Show full secret values")
-	flag.BoolVar(&partialMask, "partial", false, "Partially mask secrets")
+	flag.BoolVar(&showSecrets, "show-secrets", false, "")
+	flag.BoolVar(&partialMask, "partial", false, "")
 
-	flag.BoolVar(&flagEnvOnly, "env", false, "Scan only .env files")
-	flag.BoolVar(&flagKeysOnly, "keys", false, "Scan only key files")
-	flag.BoolVar(&flagAWSOnly, "aws", false, "Scan only AWS credentials")
-	flag.BoolVar(&flagNoSystem, "no-system", false, "Skip filesystem scan")
+	flag.BoolVar(&flagEnvOnly, "env", false, "")
+	flag.BoolVar(&flagKeysOnly, "keys", false, "")
+	flag.BoolVar(&flagAWSOnly, "aws", false, "")
+	flag.BoolVar(&flagNoSystem, "no-system", false, "")
+
+	flag.BoolVar(&flagHelp, "help", false, "")
 
 	flag.Parse()
+
+	if flagHelp {
+		printHelp()
+		os.Exit(0)
+	}
 
 	if fi, _ := os.Stdout.Stat(); (fi.Mode() & os.ModeCharDevice) == 0 {
 		useColor = false
@@ -169,14 +199,6 @@ func recordSecret(results *[]SecretResult, stats *Stats, res SecretResult) {
 func printFileHeader(path string) {
 	fileCounter++
 	fmt.Println(colorize(ColorBlue, fmt.Sprintf("%d. %s", fileCounter, path)))
-}
-
-/* ================== SSH DETECTION ================== */
-
-func isSSHPrivateKey(data string) bool {
-	return strings.Contains(data, "BEGIN OPENSSH PRIVATE KEY") ||
-		strings.Contains(data, "BEGIN RSA PRIVATE KEY") ||
-		strings.Contains(data, "BEGIN EC PRIVATE KEY")
 }
 
 /* ================== SCANNERS ================== */
@@ -271,7 +293,7 @@ func scanKeyFile(path string, results *[]SecretResult, stats *Stats) bool {
 
 	data := string(dataBytes)
 
-	if strings.Contains(data, "PRIVATE KEY") || isSSHPrivateKey(data) {
+	if strings.Contains(data, "PRIVATE KEY") {
 
 		printFileHeader(path)
 
@@ -359,7 +381,6 @@ func scanSSH(results *[]SecretResult, stats *Stats) {
 		}
 
 		stats.FilesScanned++
-
 		scanKeyFile(path, results, stats)
 
 		return nil
@@ -419,41 +440,26 @@ func main() {
 	scanAWS(&results, &stats)
 	scanSSH(&results, &stats)
 
-	fmt.Println("\n" + colorize(ColorYellow, "📊 Scan Summary"))
-	fmt.Println("--------------------------------------------------")
+	fmt.Println("\n📊 Scan Summary")
+	fmt.Println("---------------------------")
 
-	fmt.Println(colorize(ColorYellow, fmt.Sprintf("Total secrets found: %d", stats.TotalSecrets)))
-	fmt.Println(colorize(ColorYellow, fmt.Sprintf("Total files scanned: %d\n", stats.FilesScanned)))
+	fmt.Printf("Total secrets: %d\n", stats.TotalSecrets)
+	fmt.Printf("Files scanned: %d\n\n", stats.FilesScanned)
 
-	fmt.Println("Breakdown by source:")
 	for source, count := range stats.BySource {
-		fmt.Printf("  %-15s : %d\n", source, count)
+		fmt.Printf("%-15s : %d\n", source, count)
 	}
 
 	reportFile := "secret_report.json"
-	f, err := os.Create(reportFile)
-	if err != nil {
-		fmt.Println("Error creating report file:", err)
-		return
-	}
+	f, _ := os.Create(reportFile)
 	defer f.Close()
 
-	reportData := map[string]interface{}{
+	jsonData, _ := json.MarshalIndent(map[string]interface{}{
 		"stats":   stats,
 		"secrets": results,
-	}
+	}, "", "  ")
 
-	jsonData, err := json.MarshalIndent(reportData, "", "  ")
-	if err != nil {
-		fmt.Println("Error marshaling JSON:", err)
-		return
-	}
+	f.Write(jsonData)
 
-	_, err = f.Write(jsonData)
-	if err != nil {
-		fmt.Println("Error writing report file:", err)
-		return
-	}
-
-	fmt.Println(colorize(ColorYellow, "\n✅ Secret report saved to "+reportFile))
+	fmt.Println("\n✅ Report saved to", reportFile)
 }
