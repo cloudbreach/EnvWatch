@@ -180,6 +180,10 @@ MIT License
 
 ---
 
+## Contribute
+
+Feel free to create a Pull Request if you have any ideas or features you would like to add.
+
 ## 💡 Inspiration
 
 Built to simplify secret discovery and reduce accidental leaks during development and deployment.
