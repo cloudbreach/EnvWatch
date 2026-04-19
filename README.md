@@ -195,3 +195,5 @@ Built to simplify secret discovery and reduce accidental leaks during developmen
 Finally, to see a demonstration of the program visit the following link.
 
 [EnvWatch Demonstration](https://asciinema.org/a/DOGKAjuh0qARe32M)
+
+Developed by Marios Daskalas
