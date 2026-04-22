@@ -194,7 +194,7 @@ Built to simplify secret discovery and reduce accidental leaks during developmen
 
 Finally, to see a demonstration of the program visit the following link.
 
-[EnvWatch Demonstration](https://asciinema.org/a/DOGKAjuh0qARe32M)
+[EnvWatch Demonstration](https://asciinema.org/a/SvY1Ow9zC6xFjclA)
 
 ## Screenshots
 
