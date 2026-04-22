@@ -192,7 +192,7 @@ Built to simplify secret discovery and reduce accidental leaks during developmen
 
 [![Go Version](https://img.shields.io/static/v1.svg?label=Go&message=1.24.13&color=blue)]()
 
-Finally, to see a demonstration of the program visit the following link.
+Finally, here is a demonstration of the program in action!
 
 ![EnvWatch Demonstration 1](envwatch.gif)
 
