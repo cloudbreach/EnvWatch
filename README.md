@@ -196,4 +196,12 @@ Finally, to see a demonstration of the program visit the following link.
 
 [EnvWatch Demonstration](https://asciinema.org/a/DOGKAjuh0qARe32M)
 
+## Screenshots
+
+![](images/img1.png)
+![](images/img2.png)
+![](images/img3.png)
+![](images/img4.png)
+![](images/img5.png)
+
 Developed by Marios Daskalas
