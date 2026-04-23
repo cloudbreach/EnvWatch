@@ -192,6 +192,12 @@ Built to simplify secret discovery and reduce accidental leaks during developmen
 
 [![Go Version](https://img.shields.io/static/v1.svg?label=Go&message=1.24.13&color=blue)]()
 
+## Blog
+
+Here is a blog post for that tool. Enjoy! :)
+
+[Blog Post](https://cloudbreach.io/blog/envwatch-find-exposed-secrets-before-hackers-do)
+
 Finally, here is a demonstration of the program in action!
 
 ![EnvWatch Demonstration 1](envwatch.gif)
