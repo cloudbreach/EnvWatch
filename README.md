@@ -7,6 +7,8 @@
 
 It helps developers and security-conscious users quickly identify sensitive data leaks across environment variables, config files, and the filesystem.
 
+![](images/img1.png)
+
 ## 🚀 Features
 
 * 🔎 Scan environment variables for secrets
@@ -177,7 +179,7 @@ See EnvWatch in action. The demonstration below shows how quickly the tool can s
 
 ## Screenshots
 
-![](images/img1.png)
+
 ![](images/img2.png)
 ![](images/img3.png)
 ![](images/img4.png)
