@@ -4,8 +4,6 @@
 
 It helps developers and security-conscious users quickly identify sensitive data leaks across environment variables, config files, and the filesystem.
 
----
-
 ## 🚀 Features
 
 * 🔎 Scan environment variables for secrets
@@ -17,8 +15,6 @@ It helps developers and security-conscious users quickly identify sensitive data
 * 📊 JSON report generation
 * 🎨 Colored terminal output (auto-disabled when piped)
 
----
-
 ## 📦 Installation
 
 ```bash
@@ -26,8 +22,6 @@ git clone https://github.com/cloudbreach/EnvWatch.git
 cd envwatch
 go run envwatch.go --help
 ```
-
----
 
 ## ▶️ Usage
 
@@ -47,7 +41,6 @@ go run envwatch.go --help
 | `--partial`      | Partially mask secrets    |
 | `--help`         | Show help menu            |
 
----
 
 ## 🧪 Examples
 
@@ -75,8 +68,6 @@ Show full secrets (⚠️ sensitive):
 go run envwatch.go --show-secrets
 ```
 
----
-
 ## 🛠 How It Works
 
 EnvWatch uses two main approaches:
@@ -96,8 +87,6 @@ It searches for variable names containing common secret-related terms:
 
 It calculates the **Shannon entropy** of values to detect random-looking strings that may indicate secrets.
 
----
-
 ## 📂 Scan Targets
 
 * Environment variables (`os.Environ`)
@@ -113,7 +102,6 @@ It calculates the **Shannon entropy** of values to detect random-looking strings
   * `.pem`
   * `.key`
 
----
 
 ## 📊 Output
 
@@ -154,31 +142,22 @@ Contains:
 }
 ```
 
----
-
 ## 🔐 Security Notes
 
 * By default, secrets are **fully redacted**
 * Use `--partial` or `--show-secrets` with caution
 * Avoid sharing generated reports publicly if secrets are exposed
 
----
-
-## 🧩 Future Improvements
-
-* Git repository scanning
-* Ignore/include path filters
-* Custom keyword configuration
-* Real-time monitoring mode
-* Export formats (CSV, HTML)
-
----
+## 🧩 Comming Next
+* [ ] Git repository scanning
+* [ ] Ignore/include path filters
+* [ ] Custom keyword configuration 
+* [ ] Real-time monitoring mode
+* [ ] Export formats (CSV, HTML)
 
 ## 📜 License
 
-MIT License
-
----
+This project is licensed under the MIT License.
 
 ## Contribute
 
@@ -188,18 +167,15 @@ Feel free to create a Pull Request if you have any ideas or features you would l
 
 Built to simplify secret discovery and reduce accidental leaks during development and deployment.
 
----
-
 [![Go Version](https://img.shields.io/static/v1.svg?label=Go&message=1.24.13&color=blue)]()
 
 ## Blog
 
-Here is a blog post for that tool. Enjoy! :)
+For a deeper dive into the methodology behind the tool and why securing `.env` files is critical, check out our full write-up: 🔗 [EnvWatch - Find Exposed Secrets Before Hackers Do](https://cloudbreach.io/blog/envwatch-find-exposed-secrets-before-hackers-do)
 
-[Blog Post](https://cloudbreach.io/blog/envwatch-find-exposed-secrets-before-hackers-do)
+## Demo
 
-Finally, here is a demonstration of the program in action!
-
+See EnvWatch in action. The demonstration below shows how quickly the tool can scan and identify exposed secrets in real-time:
 ![EnvWatch Demonstration 1](envwatch.gif)
 
 ## Screenshots
@@ -210,4 +186,6 @@ Finally, here is a demonstration of the program in action!
 ![](images/img4.png)
 ![](images/img5.png)
 
-Developed by Marios Daskalas
+## Author
+
+Marios Daskalas
