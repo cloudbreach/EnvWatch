@@ -179,7 +179,6 @@ See EnvWatch in action. The demonstration below shows how quickly the tool can s
 
 ## Screenshots
 
-
 ![](images/img2.png)
 ![](images/img3.png)
 ![](images/img4.png)
@@ -187,4 +186,4 @@ See EnvWatch in action. The demonstration below shows how quickly the tool can s
 
 ## Author
 
-Marios Daskalas
+Marios Daskalas, Cloud Security Engineer @ [CloudBreach](https://cloudbreach.io)
