@@ -1,4 +1,6 @@
 [![Go Version](https://img.shields.io/static/v1.svg?label=Go&message=1.24.13&color=blue)]()
+[![License](https://img.shields.io/github/license/cloudbreach/EnvWatch.svg)](https://github.com/cloudbreach/EnvWatch/blob/master/LICENSE)
+[![Issues](https://img.shields.io/github/issues/cloudbreach/EnvWatch?style=popout)](https://github.com/cloudbreach/EnvWatch//issues)
 # 🔍 EnvWatch
 
 **EnvWatch** is a lightweight Go utility that scans your system for potentially exposed secrets such as API keys, passwords, private keys, and AWS credentials.
