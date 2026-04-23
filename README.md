@@ -1,3 +1,4 @@
+[![Go Version](https://img.shields.io/static/v1.svg?label=Go&message=1.24.13&color=blue)]()
 # 🔍 EnvWatch
 
 **EnvWatch** is a lightweight Go utility that scans your system for potentially exposed secrets such as API keys, passwords, private keys, and AWS credentials.
@@ -162,12 +163,6 @@ This project is licensed under the MIT License.
 ## Contribute
 
 Feel free to create a Pull Request if you have any ideas or features you would like to add.
-
-## 💡 Inspiration
-
-Built to simplify secret discovery and reduce accidental leaks during development and deployment.
-
-[![Go Version](https://img.shields.io/static/v1.svg?label=Go&message=1.24.13&color=blue)]()
 
 ## Blog
 
